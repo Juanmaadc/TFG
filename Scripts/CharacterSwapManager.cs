@@ -22,6 +22,8 @@ public class CharacterSwapManager : MonoBehaviour
 
     private GameObject currentPlayer;
 
+    public GameObject CurrentPlayer => currentPlayer;
+
     void Start()
     {
         if (initialPlayer == null)
@@ -105,8 +107,11 @@ public class CharacterSwapManager : MonoBehaviour
     {
         Transform trackingTarget = GetTrackingTarget(playerObject);
 
+        // Si luego implementas SetPlayerTarget en el minimapa, puedes reactivar esta parte.
         if (minimap != null)
-            //minimap.SetPlayerTarget(trackingTarget);
+        {
+            // minimap.SetPlayerTarget(trackingTarget);
+        }
 
         if (cinemachineCamera != null)
         {

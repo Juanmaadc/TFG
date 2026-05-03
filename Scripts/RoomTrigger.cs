@@ -14,10 +14,20 @@ public class RoomTrigger2D : MonoBehaviour
     public void Configure(List<EnemyChaser2D> roomEnemies)
     {
         enemies.Clear();
-        enemies.AddRange(roomEnemies);
+
+        if (roomEnemies != null)
+            enemies.AddRange(roomEnemies);
 
         BoxCollider2D col = GetComponent<BoxCollider2D>();
         col.isTrigger = true;
+    }
+
+    public void AddEnemy(EnemyChaser2D enemy)
+    {
+        if (enemy == null || enemies.Contains(enemy))
+            return;
+
+        enemies.Add(enemy);
     }
 
     void OnTriggerEnter2D(Collider2D other)
@@ -49,7 +59,8 @@ public class RoomTrigger2D : MonoBehaviour
 
         foreach (EnemyChaser2D enemy in enemies)
         {
-            if (enemy == null) continue;
+            if (enemy == null)
+                continue;
 
             enemy.Sleep();
 

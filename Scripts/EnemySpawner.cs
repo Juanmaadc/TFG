@@ -45,12 +45,7 @@ public class DungeonEnemySpawner2D : MonoBehaviour
         }
 
         ClearPrevious();
-
-        if (runtimeRoot == null)
-        {
-            GameObject root = new GameObject("GeneratedRoomsRuntime");
-            runtimeRoot = root.transform;
-        }
+        EnsureRuntimeRoot();
 
         foreach (RectInt room in dungeon.Rooms)
         {
@@ -61,13 +56,68 @@ public class DungeonEnemySpawner2D : MonoBehaviour
         }
     }
 
+    public void SpawnExtraEnemiesInRoom(RectInt room, int amount, Transform initialTarget = null)
+    {
+        if (dungeon == null || enemyPrefab == null)
+        {
+            Debug.LogWarning("DungeonEnemySpawner2D: faltan referencias para generar enemigos extra.");
+            return;
+        }
+
+        if (amount <= 0)
+            return;
+
+        RoomTrigger2D roomTrigger = CreateRoomRuntimeIfMissing(room);
+        if (roomTrigger == null)
+            return;
+
+        for (int i = 0; i < amount; i++)
+        {
+            EnemyChaser2D enemy = SpawnEnemy(room, roomTrigger.transform);
+            roomTrigger.AddEnemy(enemy);
+
+            if (enemy != null && initialTarget != null)
+                enemy.WakeUp(initialTarget);
+        }
+    }
+
     void CreateRoomRuntime(RectInt room)
     {
-        GameObject roomGO = new GameObject($"Room_{room.xMin}_{room.yMin}");
+        RoomTrigger2D roomTrigger = CreateRoomRuntimeIfMissing(room);
+        if (roomTrigger == null)
+            return;
+
+        int enemyCount = Random.Range(minEnemiesPerRoom, maxEnemiesPerRoom + 1);
+
+        for (int i = 0; i < enemyCount; i++)
+        {
+            EnemyChaser2D enemy = SpawnEnemy(room, roomTrigger.transform);
+            roomTrigger.AddEnemy(enemy);
+        }
+    }
+
+    RoomTrigger2D CreateRoomRuntimeIfMissing(RectInt room)
+    {
+        EnsureRuntimeRoot();
+
+        string roomObjectName = GetRoomObjectName(room);
+        Transform existing = runtimeRoot.Find(roomObjectName);
+
+        if (existing != null)
+        {
+            RoomTrigger2D existingTrigger = existing.GetComponent<RoomTrigger2D>();
+            if (existingTrigger != null)
+                return existingTrigger;
+        }
+
+        GameObject roomGO = existing != null ? existing.gameObject : new GameObject(roomObjectName);
         roomGO.transform.SetParent(runtimeRoot);
         roomGO.transform.position = dungeon.GetRoomTriggerCenterWorld(room);
 
-        BoxCollider2D trigger = roomGO.AddComponent<BoxCollider2D>();
+        BoxCollider2D trigger = roomGO.GetComponent<BoxCollider2D>();
+        if (trigger == null)
+            trigger = roomGO.AddComponent<BoxCollider2D>();
+
         trigger.isTrigger = true;
 
         Vector2 size = dungeon.GetRoomSizeWorld(room);
@@ -76,30 +126,46 @@ public class DungeonEnemySpawner2D : MonoBehaviour
             Mathf.Max(0.1f, size.y - triggerShrink)
         );
 
-        RoomTrigger2D roomTrigger = roomGO.AddComponent<RoomTrigger2D>();
-
-        int enemyCount = Random.Range(minEnemiesPerRoom, maxEnemiesPerRoom + 1);
-        List<EnemyChaser2D> roomEnemies = new();
-
-        for (int i = 0; i < enemyCount; i++)
+        RoomTrigger2D roomTrigger = roomGO.GetComponent<RoomTrigger2D>();
+        if (roomTrigger == null)
         {
-            Vector3 spawnPos = dungeon.GetRandomWorldPositionInRoom(room, spawnMarginInsideRoom);
-
-            GameObject enemyGO = Instantiate(
-                enemyPrefab,
-                spawnPos,
-                Quaternion.identity,
-                roomGO.transform
-            );
-
-            EnemyChaser2D enemy = enemyGO.GetComponent<EnemyChaser2D>();
-            if (enemy == null)
-                enemy = enemyGO.AddComponent<EnemyChaser2D>();
-
-            roomEnemies.Add(enemy);
+            roomTrigger = roomGO.AddComponent<RoomTrigger2D>();
+            roomTrigger.Configure(new List<EnemyChaser2D>());
         }
 
-        roomTrigger.Configure(roomEnemies);
+        return roomTrigger;
+    }
+
+    EnemyChaser2D SpawnEnemy(RectInt room, Transform parent)
+    {
+        Vector3 spawnPos = dungeon.GetRandomWorldPositionInRoom(room, spawnMarginInsideRoom);
+
+        GameObject enemyGO = Instantiate(
+            enemyPrefab,
+            spawnPos,
+            Quaternion.identity,
+            parent
+        );
+
+        EnemyChaser2D enemy = enemyGO.GetComponent<EnemyChaser2D>();
+        if (enemy == null)
+            enemy = enemyGO.AddComponent<EnemyChaser2D>();
+
+        return enemy;
+    }
+
+    void EnsureRuntimeRoot()
+    {
+        if (runtimeRoot != null)
+            return;
+
+        GameObject root = new GameObject("GeneratedRoomsRuntime");
+        runtimeRoot = root.transform;
+    }
+
+    string GetRoomObjectName(RectInt room)
+    {
+        return $"Room_{room.xMin}_{room.yMin}";
     }
 
     void ClearPrevious()
@@ -108,8 +174,6 @@ public class DungeonEnemySpawner2D : MonoBehaviour
             return;
 
         for (int i = runtimeRoot.childCount - 1; i >= 0; i--)
-        {
             Destroy(runtimeRoot.GetChild(i).gameObject);
-        }
     }
 }

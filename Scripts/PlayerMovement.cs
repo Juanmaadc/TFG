@@ -18,6 +18,8 @@ public class PlayerMovement : MonoBehaviour
     public Transform attackPoint;
     public float attackRadius = 0.7f;
     public LayerMask enemyLayer;
+    public float enemyKnockbackDistance = 0.8f;
+    public float enemyKnockbackDuration = 0.12f;
 
     private Vector2 movement;
     private bool isAttacking;
@@ -136,7 +138,18 @@ public class PlayerMovement : MonoBehaviour
 
             if (enemyHealth != null && !damagedEnemies.Contains(enemyHealth))
             {
-                enemyHealth.TakeDamage(attackDamage);
+                Vector2 hitDirection = ((Vector2)enemyHealth.transform.position - (Vector2)transform.position).normalized;
+
+                if (hitDirection.sqrMagnitude <= 0.001f)
+                    hitDirection = new Vector2(facingDirection, 0f);
+
+                enemyHealth.TakeDamage(
+                    attackDamage,
+                    hitDirection,
+                    enemyKnockbackDistance,
+                    enemyKnockbackDuration
+                );
+
                 damagedEnemies.Add(enemyHealth);
             }
         }
