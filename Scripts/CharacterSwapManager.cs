@@ -26,6 +26,8 @@ public class CharacterSwapManager : MonoBehaviour
 
     void Start()
     {
+        ResolveSceneReferences();
+
         if (initialPlayer == null)
             initialPlayer = GameObject.FindGameObjectWithTag("Player");
 
@@ -35,25 +37,68 @@ public class CharacterSwapManager : MonoBehaviour
             return;
         }
 
-        currentPlayer = initialPlayer;
+        currentPlayer = BuildSelectedCharacterIfNeeded(initialPlayer);
+        EnsurePlayerTag(currentPlayer);
+        CharacterSelectionState.CaptureFromPlayer(currentPlayer);
         UpdateSceneReferences(currentPlayer);
+        RetargetHeartUIs(currentPlayer);
+
+        // Importante al cambiar de escena: otros scripts pueden haber cogido como objetivo
+        // al Player colocado inicialmente en la escena antes de que este gestor lo reemplace.
+        // Por eso se fuerza el objetivo del enemigo/cámara al Player definitivo.
+        RetargetEnemies(GetTrackingTarget(currentPlayer));
     }
 
     public void SwapToRandomDifferent(GameObject oldPlayer)
     {
-        if (oldPlayer == null || characters == null || characters.Length == 0)
+        if (!TryGetRandomDifferentCharacter(oldPlayer, out string targetCharacterId, out _))
             return;
 
-        PlayerCharacterId oldId = oldPlayer.GetComponent<PlayerCharacterId>();
-        string currentId = oldId != null ? oldId.characterId : "";
+        SwapToCharacter(oldPlayer, targetCharacterId);
+    }
 
-        int currentIndex = FindIndexById(currentId);
+    public bool TryGetRandomDifferentCharacter(GameObject referencePlayer, out string characterId, out GameObject prefab)
+    {
+        characterId = string.Empty;
+        prefab = null;
+
+        if (characters == null || characters.Length == 0)
+            return false;
+
+        int currentIndex = GetCharacterIndexForPlayer(referencePlayer);
         int nextIndex = GetRandomDifferentIndex(currentIndex);
+        if (!IsValidCharacterIndex(nextIndex))
+            return false;
 
-        if (nextIndex < 0 || characters[nextIndex].prefab == null)
+        characterId = characters[nextIndex].id;
+        prefab = characters[nextIndex].prefab;
+        return prefab != null;
+    }
+
+    public bool SwapToCharacter(GameObject oldPlayer, string targetCharacterId)
+    {
+        if (string.IsNullOrWhiteSpace(targetCharacterId))
+            return false;
+
+        int targetIndex = FindIndexById(targetCharacterId);
+        if (!IsValidCharacterIndex(targetIndex))
         {
-            Debug.LogWarning("CharacterSwapManager: no se encontró prefab válido para el cambio.");
-            return;
+            Debug.LogWarning($"CharacterSwapManager: no se encontró el personaje '{targetCharacterId}'.");
+            return false;
+        }
+
+        return SwapToCharacterByIndex(oldPlayer, targetIndex);
+    }
+
+    private bool SwapToCharacterByIndex(GameObject oldPlayer, int targetIndex)
+    {
+        if (oldPlayer == null || !IsValidCharacterIndex(targetIndex))
+            return false;
+
+        if (characters[targetIndex].prefab == null)
+        {
+            Debug.LogWarning("CharacterSwapManager: el prefab del personaje destino es nulo.");
+            return false;
         }
 
         Vector3 spawnPos = oldPlayer.transform.position;
@@ -65,7 +110,8 @@ public class CharacterSwapManager : MonoBehaviour
 
         PrepareOldPlayerForRemoval(oldPlayer);
 
-        GameObject newPlayer = Instantiate(characters[nextIndex].prefab, spawnPos, spawnRot);
+        GameObject newPlayer = Instantiate(characters[targetIndex].prefab, spawnPos, spawnRot);
+        EnsurePlayerTag(newPlayer);
 
         Vector3 newScale = newPlayer.transform.localScale;
         newScale.x = Mathf.Abs(newScale.x) * facingSign;
@@ -76,11 +122,80 @@ public class CharacterSwapManager : MonoBehaviour
             newMovement.facingDirection = oldMovement.facingDirection;
 
         currentPlayer = newPlayer;
+        CharacterSelectionState.CaptureFromPlayer(currentPlayer);
 
         UpdateSceneReferences(newPlayer);
-        RetargetAwakeEnemies(GetTrackingTarget(newPlayer));
+        RetargetHeartUIs(newPlayer);
+        RetargetEnemies(GetTrackingTarget(newPlayer));
 
         Destroy(oldPlayer);
+        return true;
+    }
+
+    private GameObject BuildSelectedCharacterIfNeeded(GameObject scenePlayer)
+    {
+        if (scenePlayer == null)
+            return null;
+
+        if (!CharacterSelectionState.HasSelection)
+            return scenePlayer;
+
+        PlayerCharacterId sceneCharacterId = scenePlayer.GetComponent<PlayerCharacterId>();
+        if (sceneCharacterId == null)
+            sceneCharacterId = scenePlayer.GetComponentInChildren<PlayerCharacterId>();
+
+        string sceneId = sceneCharacterId != null ? sceneCharacterId.characterId : "";
+        string selectedId = CharacterSelectionState.SelectedCharacterId;
+
+        if (sceneId == selectedId)
+            return scenePlayer;
+
+        if (characters == null || characters.Length == 0)
+        {
+            Debug.LogWarning($"CharacterSwapManager: no hay lista de personajes para restaurar '{selectedId}'. Se usará el Player colocado en la escena.");
+            return scenePlayer;
+        }
+
+        int selectedIndex = FindIndexById(selectedId);
+        if (selectedIndex < 0 || selectedIndex >= characters.Length || characters[selectedIndex].prefab == null)
+        {
+            Debug.LogWarning($"CharacterSwapManager: no hay prefab configurado para restaurar el personaje '{selectedId}'. Se usará el Player colocado en la escena.");
+            return scenePlayer;
+        }
+
+        Vector3 spawnPos = scenePlayer.transform.position;
+        Quaternion spawnRot = scenePlayer.transform.rotation;
+        int facingSign = scenePlayer.transform.localScale.x >= 0f ? 1 : -1;
+
+        PrepareOldPlayerForRemoval(scenePlayer);
+
+        GameObject restoredPlayer = Instantiate(characters[selectedIndex].prefab, spawnPos, spawnRot);
+        EnsurePlayerTag(restoredPlayer);
+
+        Vector3 restoredScale = restoredPlayer.transform.localScale;
+        restoredScale.x = Mathf.Abs(restoredScale.x) * facingSign;
+        restoredPlayer.transform.localScale = restoredScale;
+
+        Destroy(scenePlayer);
+        return restoredPlayer;
+    }
+
+    private void ResolveSceneReferences()
+    {
+        if (minimap == null)
+            minimap = FindObjectOfType<DungeonMinimapUI>();
+
+        if (cinemachineCamera == null)
+            cinemachineCamera = FindObjectOfType<CinemachineCamera>();
+    }
+
+    private void EnsurePlayerTag(GameObject playerObject)
+    {
+        if (playerObject == null)
+            return;
+
+        if (!playerObject.CompareTag("Player"))
+            playerObject.tag = "Player";
     }
 
     private void PrepareOldPlayerForRemoval(GameObject oldPlayer)
@@ -105,9 +220,12 @@ public class CharacterSwapManager : MonoBehaviour
 
     private void UpdateSceneReferences(GameObject playerObject)
     {
-        Transform trackingTarget = GetTrackingTarget(playerObject);
+        ResolveSceneReferences();
 
-        // Si luego implementas SetPlayerTarget en el minimapa, puedes reactivar esta parte.
+        Transform trackingTarget = GetTrackingTarget(playerObject);
+        if (trackingTarget == null)
+            return;
+
         if (minimap != null)
         {
             // minimap.SetPlayerTarget(trackingTarget);
@@ -125,6 +243,10 @@ public class CharacterSwapManager : MonoBehaviour
             cinemachineCamera.Target = target;
 
             cinemachineCamera.Prioritize();
+        }
+        else
+        {
+            Debug.LogWarning("CharacterSwapManager: no se encontró CinemachineCamera en la escena. Asigna la cámara o deja que se encuentre automáticamente.");
         }
 
         Debug.Log("Tracking target -> " + trackingTarget.name + " pos " + trackingTarget.position);
@@ -154,19 +276,71 @@ public class CharacterSwapManager : MonoBehaviour
         return playerObject.transform;
     }
 
-    private void RetargetAwakeEnemies(Transform newTarget)
+    private void RetargetHeartUIs(GameObject playerObject)
     {
+        if (playerObject == null)
+            return;
+
+        PlayerHealth2D health = playerObject.GetComponent<PlayerHealth2D>();
+        if (health == null)
+            health = playerObject.GetComponentInChildren<PlayerHealth2D>(true);
+
+        if (health == null)
+            return;
+
+        PlayerHeartsUI[] heartUis = FindObjectsOfType<PlayerHeartsUI>();
+        foreach (PlayerHeartsUI heartUi in heartUis)
+        {
+            if (heartUi != null)
+                heartUi.SetTarget(health);
+        }
+    }
+
+    private void RetargetEnemies(Transform newTarget)
+    {
+        if (newTarget == null)
+            return;
+
         EnemyChaser2D[] enemies = FindObjectsOfType<EnemyChaser2D>();
 
         foreach (EnemyChaser2D enemy in enemies)
         {
-            if (enemy != null && enemy.IsAwake)
+            if (enemy != null)
+                enemy.Retarget(newTarget);
+        }
+
+        FireballEnemy2D[] fireballEnemies = FindObjectsOfType<FireballEnemy2D>();
+
+        foreach (FireballEnemy2D enemy in fireballEnemies)
+        {
+            if (enemy != null)
                 enemy.Retarget(newTarget);
         }
     }
 
+    private int GetCharacterIndexForPlayer(GameObject playerObject)
+    {
+        if (playerObject == null)
+            return -1;
+
+        PlayerCharacterId oldId = playerObject.GetComponent<PlayerCharacterId>();
+        if (oldId == null)
+            oldId = playerObject.GetComponentInChildren<PlayerCharacterId>(true);
+
+        string currentId = oldId != null ? oldId.characterId : string.Empty;
+        return FindIndexById(currentId);
+    }
+
+    private bool IsValidCharacterIndex(int index)
+    {
+        return characters != null && index >= 0 && index < characters.Length;
+    }
+
     private int FindIndexById(string id)
     {
+        if (characters == null)
+            return -1;
+
         for (int i = 0; i < characters.Length; i++)
         {
             if (characters[i].id == id)
@@ -178,7 +352,7 @@ public class CharacterSwapManager : MonoBehaviour
 
     private int GetRandomDifferentIndex(int currentIndex)
     {
-        if (characters.Length == 0)
+        if (characters == null || characters.Length == 0)
             return -1;
 
         if (characters.Length == 1)

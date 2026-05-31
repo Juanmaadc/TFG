@@ -12,6 +12,10 @@ public class DungeonRoomsCorridors2D : MonoBehaviour
     public TileBase floorTile;
     public TileBase wallTile;
 
+    [Header("Walls")]
+    [Tooltip("If enabled, every non-floor cell inside the generated dungeon rectangle is painted with the wall tile. This prevents empty blue holes from being visible.")]
+    public bool fillAllEmptyCellsWithWallTile = true;
+
     [Header("Dungeon Size")]
     public int width = 120;
     public int height = 70;
@@ -372,7 +376,10 @@ public class DungeonRoomsCorridors2D : MonoBehaviour
         for (int x = 0; x < width; x++)
         for (int y = 0; y < height; y++)
         {
-            if (map[x, y] != 1 && HasNeighborFloor(x, y))
+            if (map[x, y] == 1)
+                continue;
+
+            if (fillAllEmptyCellsWithWallTile || HasNeighborFloor(x, y))
                 wallTilemap.SetTile(ToWorldCell(x, y), wallTile);
         }
 
@@ -420,6 +427,9 @@ public class DungeonRoomsCorridors2D : MonoBehaviour
     {
         if (map == null || !InBounds(x, y) || map[x, y] == 1)
             return false;
+
+        if (fillAllEmptyCellsWithWallTile)
+            return true;
 
         if (x == 0 || y == 0 || x == width - 1 || y == height - 1)
             return true;

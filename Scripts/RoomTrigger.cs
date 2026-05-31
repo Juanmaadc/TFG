@@ -5,7 +5,10 @@ using UnityEngine;
 public class RoomTrigger2D : MonoBehaviour
 {
     [SerializeField] private bool activateOnlyOnce = false;
-    [SerializeField] private bool sleepEnemiesOnExit = true;
+
+    [Tooltip("Si está desactivado, los enemigos que se despiertan en una sala seguirán persiguiendo al jugador aunque salga de ella.")]
+    [SerializeField] private bool sleepEnemiesOnExit = false;
+
     [SerializeField] private bool returnEnemiesToSpawnOnExit = false;
 
     private readonly List<EnemyChaser2D> enemies = new();

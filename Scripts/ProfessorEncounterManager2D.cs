@@ -377,3 +377,4 @@ public class ProfessorEncounterManager2D : MonoBehaviour
         currentProfessor = null;
     }
 }
+

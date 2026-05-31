@@ -35,6 +35,8 @@ public class MainMenuUI : MonoBehaviour
             return;
         }
 
+        Time.timeScale = 1f;
+        CharacterSelectionState.Clear();
         SceneManager.LoadScene(firstLevelSceneName);
     }
 

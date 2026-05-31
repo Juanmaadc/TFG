@@ -6,6 +6,10 @@ public class CharacterChangeItemSpawner2D : MonoBehaviour
     [SerializeField] private DungeonRoomsCorridors2D dungeon;
     [SerializeField] private GameObject characterChangeItemPrefab;
 
+    [Header("Random spawn mode")]
+    [Tooltip("Desactívalo si el libro de cambio de personaje debe aparecer al matar enemigos en vez de aparecer aleatoriamente en la dungeon.")]
+    [SerializeField] private bool spawnRandomlyOnDungeonGenerated = false;
+
     [Header("Spawn")]
     [SerializeField] private int spawnMarginInsideRoom = 1;
 
@@ -30,15 +34,29 @@ public class CharacterChangeItemSpawner2D : MonoBehaviour
             RebuildItem();
     }
 
+    public void SetRandomSpawnEnabled(bool enabled)
+    {
+        spawnRandomlyOnDungeonGenerated = enabled;
+
+        if (!spawnRandomlyOnDungeonGenerated)
+            ClearCurrentItem();
+    }
+
     public void RebuildItem()
     {
+        if (!spawnRandomlyOnDungeonGenerated)
+        {
+            ClearCurrentItem();
+            return;
+        }
+
         if (dungeon == null || characterChangeItemPrefab == null)
         {
             Debug.LogWarning("CharacterChangeItemSpawner2D: faltan referencias.");
             return;
         }
 
-        ClearPrevious();
+        ClearCurrentItem();
 
         if (runtimeRoot == null)
         {
@@ -65,9 +83,12 @@ public class CharacterChangeItemSpawner2D : MonoBehaviour
         );
     }
 
-    void ClearPrevious()
+    public void ClearCurrentItem()
     {
         if (currentItem != null)
+        {
             Destroy(currentItem);
+            currentItem = null;
+        }
     }
 }

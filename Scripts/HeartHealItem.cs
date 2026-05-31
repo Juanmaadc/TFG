@@ -39,6 +39,9 @@ public class HeartHealItem : MonoBehaviour
         used = true;
         playerHealth.HealToFull();
 
+        if (AudioManager2D.Instance != null)
+            AudioManager2D.Instance.PlayHeartPickupSound();
+
         if (destroyOnUse)
             Destroy(gameObject);
         else
